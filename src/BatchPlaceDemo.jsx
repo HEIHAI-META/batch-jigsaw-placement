@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CaretDown } from '@phosphor-icons/react';
 import './batch-place-demo.css';
 import {
@@ -58,12 +58,15 @@ function PuzzlePiece({ piece, className = '', style, onClick, onPointerDown, sel
 }
 
 function BatchPlaceDemo() {
+  const phoneRef = useRef(null);
   const playSpaceRef = useRef(null);
   const boardRef = useRef(null);
   const pickerRef = useRef(null);
   const holdTimerRef = useRef(null);
   const holdPieceIdRef = useRef(null);
   const pickerCloseAnimationTimerRef = useRef(null);
+  const guidePauseTimerRef = useRef(null);
+  const guideCycleTimerRef = useRef(null);
   const pickerClosingRef = useRef(false);
   const draggingRef = useRef(false);
   const pointerIdRef = useRef(null);
@@ -90,6 +93,10 @@ function BatchPlaceDemo() {
   const [hint, setHint] = useState('');
   const [gatherVectors, setGatherVectors] = useState({});
   const [pickerClosing, setPickerClosing] = useState(false);
+  const [guideStage, setGuideStage] = useState('click');
+  const [guideIndex, setGuideIndex] = useState(0);
+  const [guideCycle, setGuideCycle] = useState(0);
+  const [guidePosition, setGuidePosition] = useState(null);
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -98,6 +105,8 @@ function BatchPlaceDemo() {
       document.title = previousTitle;
       window.clearTimeout(holdTimerRef.current);
       window.clearTimeout(pickerCloseAnimationTimerRef.current);
+      window.clearTimeout(guidePauseTimerRef.current);
+      window.clearInterval(guideCycleTimerRef.current);
     };
   }, []);
 
@@ -136,6 +145,73 @@ function BatchPlaceDemo() {
       .map((id) => PIECES.find((piece) => piece.id === id)),
     [pieceOrder, placedIdSet, selectedIds],
   );
+
+  const guidePieces = useMemo(() => availablePieces.slice(0, MAX_SELECTION), [availablePieces]);
+  const selectedKey = selectedIds.join(',');
+  const guideTargetId = guideStage === 'click'
+    ? guidePieces[guideIndex]?.id
+    : guideStage === 'hold'
+      ? selectedIds.at(-1)
+      : null;
+
+  useEffect(() => {
+    window.clearTimeout(guidePauseTimerRef.current);
+    window.clearInterval(guideCycleTimerRef.current);
+
+    if (view !== 'select' || dragging || !availablePieces.length) {
+      setGuideStage('idle');
+      return undefined;
+    }
+
+    if (selectedIds.length >= 2) {
+      setGuideStage('waiting');
+      guidePauseTimerRef.current = window.setTimeout(() => {
+        setGuideCycle((cycle) => cycle + 1);
+        setGuideStage('hold');
+      }, 3000);
+      return undefined;
+    }
+
+    setGuideIndex(0);
+    setGuideCycle((cycle) => cycle + 1);
+    setGuideStage('click');
+    guideCycleTimerRef.current = window.setInterval(() => {
+      setGuideIndex((index) => (index + 1) % Math.max(guidePieces.length, 1));
+      setGuideCycle((cycle) => cycle + 1);
+    }, 1100);
+
+    return undefined;
+  }, [availablePieces.length, dragging, guidePieces.length, selectedKey, view]);
+
+  useEffect(() => {
+    if (guideStage !== 'hold') return undefined;
+    const timer = window.setInterval(() => {
+      setGuideCycle((cycle) => cycle + 1);
+    }, 3800);
+    return () => window.clearInterval(timer);
+  }, [guideStage]);
+
+  useLayoutEffect(() => {
+    if (!guideTargetId || !pickerRef.current || !phoneRef.current || pickerClosing) {
+      setGuidePosition(null);
+      return undefined;
+    }
+
+    const measureTarget = () => {
+      const target = pickerRef.current?.querySelector(`[data-piece-id="${guideTargetId}"]`);
+      const phone = phoneRef.current;
+      if (!target || !phone) return;
+      const targetRect = target.getBoundingClientRect();
+      const phoneRect = phone.getBoundingClientRect();
+      setGuidePosition({
+        x: targetRect.left - phoneRect.left + targetRect.width / 2,
+        y: targetRect.top - phoneRect.top + targetRect.height / 2,
+      });
+    };
+
+    const frame = window.requestAnimationFrame(measureTarget);
+    return () => window.cancelAnimationFrame(frame);
+  }, [guideTargetId, guideStage, pickerClosing, view, availablePieces.length, selectedKey]);
 
   const layout = useMemo(() => {
     const columns = selectedPieces.length <= 4 ? 2 : 3;
@@ -440,7 +516,7 @@ function BatchPlaceDemo() {
 
   return (
     <main className="mobile-demo-stage">
-      <section className="phone-demo" data-phone-screen>
+      <section className="phone-demo" data-phone-screen ref={phoneRef}>
         <div className="status-strip">
           <b>11:07</b>
           <span>● ● ●　⌁　59</span>
@@ -512,6 +588,21 @@ function BatchPlaceDemo() {
             </section>
           )}
         </div>
+
+        {guidePosition && (guideStage === 'click' || guideStage === 'hold') && !dragging && (
+          <div
+            className={`gesture-guide gesture-guide-${guideStage}`}
+            style={{ left: guidePosition.x, top: guidePosition.y }}
+            aria-hidden="true"
+          >
+            <span className="gesture-guide-ring" />
+            <img
+              key={`${guideStage}-${guideTargetId}-${guideCycle}`}
+              src="/assets/onboarding-hand.png"
+              alt=""
+            />
+          </div>
+        )}
 
         {view === 'board' && (
           <section className="piece-tray">
