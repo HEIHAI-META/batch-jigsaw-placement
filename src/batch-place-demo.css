@@ -17,6 +17,17 @@ body:has(.mobile-demo-stage){position:fixed;inset:0;min-width:0;background:#e7e7
 .mobile-piece.selected:active{transform:scale(1.04);filter:drop-shadow(0 5px 4px #39265055) drop-shadow(0 0 4px #7f42d2)}
 .mobile-piece.source-piece-hidden{opacity:0;transform:scale(.78);filter:none;pointer-events:none;transition:opacity .18s ease-out,transform .24s cubic-bezier(.2,.8,.2,1)}
 .mobile-piece.selection-locked{opacity:.38;filter:grayscale(.35) drop-shadow(0 1px 1px #5554);cursor:default}
+.gesture-guide{position:absolute;z-index:70;width:1px;height:1px;pointer-events:none;transform:translate(-16px,-15px);filter:drop-shadow(0 5px 4px #3a263844)}
+.gesture-guide img{position:absolute;left:-7px;top:-8px;width:66px;height:auto;display:block;opacity:.96;transform-origin:18% 12%}
+.gesture-guide-ring{position:absolute;left:-20px;top:-20px;width:40px;height:40px;border:2px solid #8c55d988;border-radius:50%;box-shadow:0 0 0 6px #8c55d91c;opacity:0}
+.gesture-guide-click img{animation:guide-click .98s cubic-bezier(.22,.74,.3,1) both}
+.gesture-guide-click .gesture-guide-ring{animation:guide-ring .98s ease-out both}
+.gesture-guide-hold img{animation:guide-hold-drag 3.8s cubic-bezier(.2,.78,.25,1) both}
+.gesture-guide-hold .gesture-guide-ring{animation:guide-hold-ring 3.8s ease-in-out both}
+@keyframes guide-click{0%{opacity:0;transform:translate(7px,8px) scale(.92) rotate(-3deg)}18%{opacity:.96;transform:translate(0,0) scale(1) rotate(0)}48%{opacity:1;transform:translate(-1px,2px) scale(.88) rotate(-1deg)}66%{opacity:1;transform:translate(0,0) scale(1.02) rotate(0)}100%{opacity:.96;transform:translate(0,0) scale(1) rotate(0)}}
+@keyframes guide-ring{0%,18%{opacity:0;transform:scale(.5)}40%{opacity:.9;transform:scale(.88)}66%{opacity:0;transform:scale(1.28)}100%{opacity:0}}
+@keyframes guide-hold-drag{0%,6%{opacity:0;transform:translate(7px,8px) scale(.92) rotate(-3deg)}14%{opacity:.96;transform:translate(0,0) scale(1) rotate(0)}25%{opacity:1;transform:translate(-1px,2px) scale(.87) rotate(-1deg)}43%{opacity:1;transform:translate(-1px,2px) scale(.87) rotate(-1deg)}52%{opacity:1;transform:translate(0,-6px) scale(1.04) rotate(0)}76%{opacity:1;transform:translate(0,-126px) scale(1.04) rotate(0)}92%{opacity:.2;transform:translate(0,-148px) scale(1.02) rotate(0)}100%{opacity:0;transform:translate(0,-154px) scale(1) rotate(0)}}
+@keyframes guide-hold-ring{0%,13%{opacity:0;transform:scale(.6)}24%,43%{opacity:.85;transform:scale(1)}52%{opacity:0;transform:scale(1.35)}100%{opacity:0;transform:scale(1.35)}}
 .existing-board-piece,.group-piece{position:absolute;z-index:5;width:50px;height:50px;pointer-events:none}.existing-board-piece>span,.group-piece>span{background-size:250px 250px;background-position:var(--image-x-small) var(--image-y-small)}
 .existing-board-piece{opacity:.92;z-index:3}
 .group-piece.preview{opacity:.58;filter:drop-shadow(0 6px 4px #2225)}
