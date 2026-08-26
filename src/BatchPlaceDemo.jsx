@@ -214,12 +214,16 @@ function BatchPlaceDemo() {
     const measureTarget = () => {
       const target = pickerRef.current?.querySelector(`[data-piece-id="${guideTargetId}"]`);
       const phone = phoneRef.current;
+      const board = boardRef.current;
       if (!target || !phone) return;
       const targetRect = target.getBoundingClientRect();
       const phoneRect = phone.getBoundingClientRect();
+      const targetCenterY = targetRect.top + targetRect.height / 2;
+      const boardTop = board?.getBoundingClientRect().top ?? targetCenterY - 132;
       setGuidePosition({
         x: targetRect.left - phoneRect.left + targetRect.width / 2,
-        y: targetRect.top - phoneRect.top + targetRect.height / 2,
+        y: targetCenterY - phoneRect.top,
+        dragY: boardTop - targetCenterY,
       });
     };
 
@@ -610,12 +614,32 @@ function BatchPlaceDemo() {
           && (
           <div
             className={`gesture-guide gesture-guide-${guideStage}`}
-            style={{ left: guidePosition.x, top: guidePosition.y }}
+            style={{
+              left: guidePosition.x,
+              top: guidePosition.y,
+              '--guide-drag-y': `${guidePosition.dragY}px`,
+            }}
             aria-hidden="true"
           >
             <span className="gesture-guide-ring" />
+            {guideStage === 'drag' && (
+              <span className="gesture-guide-trail">
+                {[0, 1, 2].map((trailIndex) => (
+                  <img
+                    key={`trail-${trailIndex}-${guideCycle}`}
+                    src={`${import.meta.env.BASE_URL}assets/onboarding-hand.png`}
+                    alt=""
+                    style={{
+                      '--trail-delay': `${(trailIndex + 1) * 0.09}s`,
+                      '--trail-opacity': 0.2 - trailIndex * 0.055,
+                    }}
+                  />
+                ))}
+              </span>
+            )}
             <img
               key={`${guideStage}-${guideTargetId}-${guideCycle}`}
+              className="gesture-guide-hand"
               src={`${import.meta.env.BASE_URL}assets/onboarding-hand.png`}
               alt=""
             />
