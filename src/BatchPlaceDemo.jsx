@@ -146,29 +146,34 @@ function BatchPlaceDemo() {
     [pieceOrder, placedIdSet, selectedIds],
   );
 
-  const guidePieces = useMemo(() => availablePieces.slice(0, 1), [availablePieces]);
+  const guidePieces = useMemo(
+    () => availablePieces.filter((piece) => !selectedIds.includes(piece.id)).slice(0, 1),
+    [availablePieces, selectedIds],
+  );
   const selectedKey = selectedIds.join(',');
   const guideTargetId = guideStage === 'click'
     ? guidePieces[guideIndex]?.id
-    : guideStage === 'hold'
-      ? selectedIds.at(-1)
+    : guideStage === 'hold' || guideStage === 'drag'
+      ? holdPieceIdRef.current ?? selectedIds.at(-1)
       : null;
 
   useEffect(() => {
     window.clearTimeout(guidePauseTimerRef.current);
     window.clearInterval(guideCycleTimerRef.current);
 
+    if (dragging && guideStage === 'drag') return undefined;
+
     if (view !== 'select' || dragging || !availablePieces.length) {
       setGuideStage('idle');
       return undefined;
     }
 
+    if (selectedIds.length >= 2 && (guideStage === 'waiting' || guideStage === 'hold')) {
+      return undefined;
+    }
+
     if (selectedIds.length >= 2) {
       setGuideStage('waiting');
-      guidePauseTimerRef.current = window.setTimeout(() => {
-        setGuideCycle((cycle) => cycle + 1);
-        setGuideStage('hold');
-      }, 3000);
       return undefined;
     }
 
@@ -181,13 +186,22 @@ function BatchPlaceDemo() {
     }, 1100);
 
     return undefined;
-  }, [availablePieces.length, dragging, guidePieces.length, selectedKey, view]);
+  }, [availablePieces.length, dragging, guidePieces.length, guideStage, selectedKey, view]);
 
   useEffect(() => {
-    if (guideStage !== 'hold') return undefined;
+    if (guideStage !== 'waiting') return undefined;
+    guidePauseTimerRef.current = window.setTimeout(() => {
+      setGuideCycle((cycle) => cycle + 1);
+      setGuideStage('hold');
+    }, 3000);
+    return () => window.clearTimeout(guidePauseTimerRef.current);
+  }, [guideStage]);
+
+  useEffect(() => {
+    if (guideStage !== 'hold' && guideStage !== 'drag') return undefined;
     const timer = window.setInterval(() => {
       setGuideCycle((cycle) => cycle + 1);
-    }, 4200);
+    }, guideStage === 'hold' ? 3200 : 1800);
     return () => window.clearInterval(timer);
   }, [guideStage]);
 
@@ -309,6 +323,7 @@ function BatchPlaceDemo() {
       window.clearTimeout(pickerCloseAnimationTimerRef.current);
       pickerClosingRef.current = false;
       setPickerClosing(false);
+      setGuideStage('drag');
     } else {
       setGatherVectors({});
     }
@@ -589,7 +604,10 @@ function BatchPlaceDemo() {
           )}
         </div>
 
-        {guidePosition && (guideStage === 'click' || guideStage === 'hold') && !dragging && (
+        {guidePosition
+          && (((guideStage === 'click' || guideStage === 'hold') && !dragging)
+            || (guideStage === 'drag' && dragging && view === 'select'))
+          && (
           <div
             className={`gesture-guide gesture-guide-${guideStage}`}
             style={{ left: guidePosition.x, top: guidePosition.y }}
