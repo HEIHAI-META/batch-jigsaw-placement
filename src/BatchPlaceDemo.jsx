@@ -598,7 +598,7 @@ function BatchPlaceDemo() {
             <span className="gesture-guide-ring" />
             <img
               key={`${guideStage}-${guideTargetId}-${guideCycle}`}
-              src="/assets/onboarding-hand.png"
+              src={`${import.meta.env.BASE_URL}assets/onboarding-hand.png`}
               alt=""
             />
           </div>
