@@ -23,6 +23,11 @@ const PIECES = Array.from({ length: 25 }, (_, index) => ({
 const INITIAL_SELECTION = [];
 const MAX_SELECTION = 6;
 const UNDO_DURATION = 10000;
+const GUIDE_COPY = {
+  select: { label: '第一步 · 选择', text: '点击选择你需要的碎片，一次最多可以选择 6 张' },
+  hold: { label: '第二步 · 长按', text: '长按任意一张已选中的碎片' },
+  drag: { label: '第三步 · 上滑', text: '向上滑动，放置到操作台' },
+};
 const INITIAL_BOARD_PIECES = [
   { pieceId: 16, x: 72, y: 174, rotate: -7 },
   { pieceId: 17, x: 164, y: 220, rotate: 4 },
@@ -67,6 +72,7 @@ function BatchPlaceDemo() {
   const pickerCloseAnimationTimerRef = useRef(null);
   const guidePauseTimerRef = useRef(null);
   const guideCycleTimerRef = useRef(null);
+  const guideCopyTimerRef = useRef(null);
   const pickerClosingRef = useRef(false);
   const draggingRef = useRef(false);
   const pointerIdRef = useRef(null);
@@ -97,6 +103,8 @@ function BatchPlaceDemo() {
   const [guideIndex, setGuideIndex] = useState(0);
   const [guideCycle, setGuideCycle] = useState(0);
   const [guidePosition, setGuidePosition] = useState(null);
+  const [displayedGuideStep, setDisplayedGuideStep] = useState('select');
+  const [guideCopyVisible, setGuideCopyVisible] = useState(true);
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -106,6 +114,7 @@ function BatchPlaceDemo() {
       window.clearTimeout(holdTimerRef.current);
       window.clearTimeout(pickerCloseAnimationTimerRef.current);
       window.clearTimeout(guidePauseTimerRef.current);
+      window.clearTimeout(guideCopyTimerRef.current);
       window.clearInterval(guideCycleTimerRef.current);
     };
   }, []);
@@ -156,6 +165,31 @@ function BatchPlaceDemo() {
     : guideStage === 'hold' || guideStage === 'drag'
       ? holdPieceIdRef.current ?? selectedIds.at(-1)
       : null;
+  const nextGuideStep = view !== 'select'
+    ? null
+    : guideStage === 'click'
+      ? 'select'
+      : guideStage === 'waiting' || guideStage === 'hold'
+        ? 'hold'
+        : guideStage === 'drag'
+          ? 'drag'
+          : null;
+
+  useEffect(() => {
+    window.clearTimeout(guideCopyTimerRef.current);
+
+    if (nextGuideStep === displayedGuideStep) {
+      setGuideCopyVisible(Boolean(nextGuideStep));
+      return undefined;
+    }
+
+    setGuideCopyVisible(false);
+    guideCopyTimerRef.current = window.setTimeout(() => {
+      setDisplayedGuideStep(nextGuideStep);
+    }, 220);
+
+    return () => window.clearTimeout(guideCopyTimerRef.current);
+  }, [displayedGuideStep, nextGuideStep]);
 
   useEffect(() => {
     window.clearTimeout(guidePauseTimerRef.current);
@@ -541,7 +575,18 @@ function BatchPlaceDemo() {
           <span>● ● ●　⌁　59</span>
         </div>
 
-        <div className="game-tools" aria-hidden="true" />
+        <div className="game-tools">
+          {displayedGuideStep && (
+            <div
+              className={`guide-copy-bubble ${guideCopyVisible ? 'is-visible' : ''}`}
+              role="status"
+              aria-live="polite"
+            >
+              <strong>{GUIDE_COPY[displayedGuideStep].label}</strong>
+              <span>{GUIDE_COPY[displayedGuideStep].text}</span>
+            </div>
+          )}
+        </div>
 
         {undoInfo && (
           <button type="button" className="undo-banner" onClick={undoLatestPlacement}>
