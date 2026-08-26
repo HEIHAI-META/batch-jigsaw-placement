@@ -146,7 +146,7 @@ function BatchPlaceDemo() {
     [pieceOrder, placedIdSet, selectedIds],
   );
 
-  const guidePieces = useMemo(() => availablePieces.slice(0, MAX_SELECTION), [availablePieces]);
+  const guidePieces = useMemo(() => availablePieces.slice(0, 1), [availablePieces]);
   const selectedKey = selectedIds.join(',');
   const guideTargetId = guideStage === 'click'
     ? guidePieces[guideIndex]?.id
@@ -187,7 +187,7 @@ function BatchPlaceDemo() {
     if (guideStage !== 'hold') return undefined;
     const timer = window.setInterval(() => {
       setGuideCycle((cycle) => cycle + 1);
-    }, 3800);
+    }, 4200);
     return () => window.clearInterval(timer);
   }, [guideStage]);
 
