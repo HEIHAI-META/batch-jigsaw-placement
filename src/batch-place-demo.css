@@ -22,7 +22,7 @@ body:has(.mobile-demo-stage){position:fixed;inset:0;min-width:0;background:#e7e7
 .mobile-piece.selected>span{animation:piece-selected-flash 1.8s ease-in-out .55s infinite}
 .mobile-piece.selected:active{transform:scale(.96);animation:none;filter:drop-shadow(0 6px 4px #39265055) drop-shadow(0 0 5px #7f42d2)}
 @keyframes piece-select-pop{0%{transform:scale(.9)}58%{transform:scale(1.14)}78%{transform:scale(1.045)}100%{transform:scale(1.08)}}
-@keyframes piece-selected-flash{0%,58%,100%{filter:brightness(1) saturate(1)}70%{filter:brightness(1.18) saturate(1.12)}82%{filter:brightness(1.03) saturate(1.02)}}
+@keyframes piece-selected-flash{0%,100%{filter:brightness(.8) saturate(.92)}50%{filter:brightness(1.18) saturate(1.12)}}
 .mobile-piece.source-piece-hidden{opacity:0;transform:scale(.78);filter:none;pointer-events:none;transition:opacity .18s ease-out,transform .24s cubic-bezier(.2,.8,.2,1)}
 .mobile-piece.selection-locked{opacity:.38;filter:grayscale(.35) drop-shadow(0 1px 1px #5554);cursor:default}
 .gesture-guide{position:absolute;z-index:70;width:1px;height:1px;pointer-events:none;transform:translate(-14px,-14px);filter:drop-shadow(0 5px 4px #3a263844)}

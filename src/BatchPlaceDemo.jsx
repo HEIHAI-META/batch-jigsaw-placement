@@ -70,7 +70,6 @@ function BatchPlaceDemo() {
   const holdTimerRef = useRef(null);
   const holdPieceIdRef = useRef(null);
   const pickerCloseAnimationTimerRef = useRef(null);
-  const guidePauseTimerRef = useRef(null);
   const guideCycleTimerRef = useRef(null);
   const guideCopyTimerRef = useRef(null);
   const pickerClosingRef = useRef(false);
@@ -113,7 +112,6 @@ function BatchPlaceDemo() {
       document.title = previousTitle;
       window.clearTimeout(holdTimerRef.current);
       window.clearTimeout(pickerCloseAnimationTimerRef.current);
-      window.clearTimeout(guidePauseTimerRef.current);
       window.clearTimeout(guideCopyTimerRef.current);
       window.clearInterval(guideCycleTimerRef.current);
     };
@@ -169,7 +167,7 @@ function BatchPlaceDemo() {
     ? null
     : guideStage === 'click'
       ? 'select'
-      : guideStage === 'waiting' || guideStage === 'hold'
+      : guideStage === 'hold'
         ? 'hold'
         : guideStage === 'drag'
           ? 'drag'
@@ -192,7 +190,6 @@ function BatchPlaceDemo() {
   }, [displayedGuideStep, nextGuideStep]);
 
   useEffect(() => {
-    window.clearTimeout(guidePauseTimerRef.current);
     window.clearInterval(guideCycleTimerRef.current);
 
     if (dragging && guideStage === 'drag') return undefined;
@@ -202,12 +199,13 @@ function BatchPlaceDemo() {
       return undefined;
     }
 
-    if (selectedIds.length >= 2 && (guideStage === 'waiting' || guideStage === 'hold')) {
+    if (selectedIds.length >= 2 && guideStage === 'hold') {
       return undefined;
     }
 
     if (selectedIds.length >= 2) {
-      setGuideStage('waiting');
+      setGuideCycle((cycle) => cycle + 1);
+      setGuideStage('hold');
       return undefined;
     }
 
@@ -221,15 +219,6 @@ function BatchPlaceDemo() {
 
     return undefined;
   }, [availablePieces.length, dragging, guidePieces.length, guideStage, selectedKey, view]);
-
-  useEffect(() => {
-    if (guideStage !== 'waiting') return undefined;
-    guidePauseTimerRef.current = window.setTimeout(() => {
-      setGuideCycle((cycle) => cycle + 1);
-      setGuideStage('hold');
-    }, 3000);
-    return () => window.clearTimeout(guidePauseTimerRef.current);
-  }, [guideStage]);
 
   useEffect(() => {
     if (guideStage !== 'hold' && guideStage !== 'drag') return undefined;
