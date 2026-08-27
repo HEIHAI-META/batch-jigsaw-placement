@@ -23,6 +23,7 @@ const PIECES = Array.from({ length: 25 }, (_, index) => ({
 const INITIAL_SELECTION = [];
 const MAX_SELECTION = 6;
 const UNDO_DURATION = 10000;
+const SELECTED_FLASH_DURATION = 1800;
 const GUIDE_COPY = {
   select: '点击选择你需要的碎片，一次最多可以选择 6 张',
   hold: '长按任意一张已选中的碎片',
@@ -82,6 +83,7 @@ function BatchPlaceDemo() {
   const holdCancelledRef = useRef(false);
   const lastPointerRef = useRef({ clientX: 0, clientY: 0 });
   const suppressClickRef = useRef(false);
+  const selectedFlashDelaysRef = useRef({});
   const originRef = useRef({ x: 96, y: 292 });
   const cursorRef = useRef({ x: 196, y: 292 });
   const insideBoardRef = useRef(false);
@@ -277,11 +279,18 @@ function BatchPlaceDemo() {
       return;
     }
 
-    const nextSelection = selectedIds.includes(id)
+    const wasSelected = selectedIds.includes(id);
+    const nextSelection = wasSelected
       ? selectedIds.filter((pieceId) => pieceId !== id)
       : selectedIds.length >= MAX_SELECTION
         ? selectedIds
         : [...selectedIds, id];
+
+    if (wasSelected) {
+      delete selectedFlashDelaysRef.current[id];
+    } else if (nextSelection !== selectedIds) {
+      selectedFlashDelaysRef.current[id] = -(performance.now() % SELECTED_FLASH_DURATION);
+    }
 
     setSelectedIds(nextSelection);
   };
@@ -630,6 +639,9 @@ function BatchPlaceDemo() {
                       className={dragging && selected ? 'source-piece-hidden' : ''}
                       selected={selected}
                       disabled={selectionLocked}
+                      style={selected ? {
+                        '--selected-flash-delay': `${selectedFlashDelaysRef.current[piece.id] ?? 0}ms`,
+                      } : undefined}
                       onClick={() => togglePiece(piece.id)}
                       onPointerDown={(event) => startHold(event, 'picker', piece.id)}
                       label={`${selected ? '取消选择' : '选择'}碎片 ${piece.id}`}

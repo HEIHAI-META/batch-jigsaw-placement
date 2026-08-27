@@ -19,10 +19,10 @@ body:has(.mobile-demo-stage){position:fixed;inset:0;min-width:0;background:#e7e7
 .mobile-piece>i{position:absolute;right:4px;top:4px;width:17px;height:17px;display:grid;place-items:center;border-radius:50%;background:#8c55d9;color:white;font-size:10px;font-style:normal;box-shadow:0 1px 4px #45257788}
 .mobile-piece:active{transform:scale(.9)}
 .mobile-piece.selected{transform:scale(1.08);filter:drop-shadow(0 4px 3px #39265033) drop-shadow(0 0 5px #7f42d2);animation:piece-select-pop .42s cubic-bezier(.18,.82,.28,1.16) both}
-.mobile-piece.selected>span{animation:piece-selected-flash 1.8s ease-in-out .55s infinite}
+.mobile-piece.selected>span{animation:piece-selected-flash 1.8s ease-in-out var(--selected-flash-delay) infinite}
 .mobile-piece.selected:active{transform:scale(.96);animation:none;filter:drop-shadow(0 6px 4px #39265055) drop-shadow(0 0 5px #7f42d2)}
 @keyframes piece-select-pop{0%{transform:scale(.9)}58%{transform:scale(1.14)}78%{transform:scale(1.045)}100%{transform:scale(1.08)}}
-@keyframes piece-selected-flash{0%,100%{filter:brightness(.8) saturate(.92)}50%{filter:brightness(1.18) saturate(1.12)}}
+@keyframes piece-selected-flash{0%,100%{filter:brightness(.68) saturate(.84)}50%{filter:brightness(1.28) saturate(1.18)}}
 .mobile-piece.source-piece-hidden{opacity:0;transform:scale(.78);filter:none;pointer-events:none;transition:opacity .18s ease-out,transform .24s cubic-bezier(.2,.8,.2,1)}
 .mobile-piece.selection-locked{opacity:.38;filter:grayscale(.35) drop-shadow(0 1px 1px #5554);cursor:default}
 .gesture-guide{position:absolute;z-index:70;width:1px;height:1px;pointer-events:none;transform:translate(-14px,-14px);filter:drop-shadow(0 5px 4px #3a263844)}
