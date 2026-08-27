@@ -24,9 +24,9 @@ const INITIAL_SELECTION = [];
 const MAX_SELECTION = 6;
 const UNDO_DURATION = 10000;
 const GUIDE_COPY = {
-  select: { label: '第一步 · 选择', text: '点击选择你需要的碎片，一次最多可以选择 6 张' },
-  hold: { label: '第二步 · 长按', text: '长按任意一张已选中的碎片' },
-  drag: { label: '第三步 · 上滑', text: '向上滑动，放置到操作台' },
+  select: '点击选择你需要的碎片，一次最多可以选择 6 张',
+  hold: '长按任意一张已选中的碎片',
+  drag: '向上滑动，放置到操作台',
 };
 const INITIAL_BOARD_PIECES = [
   { pieceId: 16, x: 72, y: 174, rotate: -7 },
@@ -186,7 +186,7 @@ function BatchPlaceDemo() {
     setGuideCopyVisible(false);
     guideCopyTimerRef.current = window.setTimeout(() => {
       setDisplayedGuideStep(nextGuideStep);
-    }, 220);
+    }, nextGuideStep === 'drag' ? 110 : 180);
 
     return () => window.clearTimeout(guideCopyTimerRef.current);
   }, [displayedGuideStep, nextGuideStep]);
@@ -578,12 +578,11 @@ function BatchPlaceDemo() {
         <div className="game-tools">
           {displayedGuideStep && (
             <div
-              className={`guide-copy-bubble ${guideCopyVisible ? 'is-visible' : ''}`}
+              className={`guide-copy-message ${guideCopyVisible ? 'is-visible' : ''}`}
               role="status"
               aria-live="polite"
             >
-              <strong>{GUIDE_COPY[displayedGuideStep].label}</strong>
-              <span>{GUIDE_COPY[displayedGuideStep].text}</span>
+              <span>{GUIDE_COPY[displayedGuideStep]}</span>
             </div>
           )}
         </div>
