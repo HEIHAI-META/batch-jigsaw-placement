@@ -13,6 +13,7 @@ import {
   holdShouldCancel,
   pointInsideRect,
 } from './pickup-gesture.js';
+import { batchFullyInsideRect, buildBatchLayout } from './batch-placement-layout.js';
 
 const PIECES = Array.from({ length: 25 }, (_, index) => ({
   id: index + 1,
@@ -21,13 +22,13 @@ const PIECES = Array.from({ length: 25 }, (_, index) => ({
 }));
 
 const INITIAL_SELECTION = [];
-const MAX_SELECTION = 6;
 const UNDO_DURATION = 10000;
-const SELECTED_FLASH_DURATION = 1800;
+const GUIDE_STORAGE_KEY = 'batch-jigsaw-guide-completed';
 const GUIDE_COPY = {
-  select: '点击选择你需要的碎片，一次最多可以选择 6 张',
+  selectFirst: '点击选择需要放置的碎片',
+  selectMore: '一次放置中，你可以选择多个碎片',
   hold: '长按任意一张已选中的碎片',
-  drag: '向上滑动，放置到操作台',
+  drag: '向上拖动，放置到操作台',
 };
 const INITIAL_BOARD_PIECES = [
   { pieceId: 16, x: 72, y: 174, rotate: -7 },
@@ -73,6 +74,7 @@ function BatchPlaceDemo() {
   const pickerCloseAnimationTimerRef = useRef(null);
   const guideCycleTimerRef = useRef(null);
   const guideCopyTimerRef = useRef(null);
+  const guideHoldDelayTimerRef = useRef(null);
   const pickerClosingRef = useRef(false);
   const draggingRef = useRef(false);
   const pointerIdRef = useRef(null);
@@ -82,12 +84,12 @@ function BatchPlaceDemo() {
   const holdTargetRef = useRef(null);
   const holdCancelledRef = useRef(false);
   const lastPointerRef = useRef({ clientX: 0, clientY: 0 });
+  const selectedIdsRef = useRef(INITIAL_SELECTION);
   const suppressClickRef = useRef(false);
-  const selectedFlashDelaysRef = useRef({});
   const originRef = useRef({ x: 96, y: 292 });
   const cursorRef = useRef({ x: 196, y: 292 });
   const insideBoardRef = useRef(false);
-  const [view, setView] = useState('select');
+  const [view, setView] = useState('board');
   const [pieceOrder, setPieceOrder] = useState(PIECES.map((piece) => piece.id));
   const [selectedIds, setSelectedIds] = useState(INITIAL_SELECTION);
   const [dragging, setDragging] = useState(false);
@@ -100,12 +102,15 @@ function BatchPlaceDemo() {
   const [hint, setHint] = useState('');
   const [gatherVectors, setGatherVectors] = useState({});
   const [pickerClosing, setPickerClosing] = useState(false);
-  const [guideStage, setGuideStage] = useState('click');
-  const [guideIndex, setGuideIndex] = useState(0);
+  const [guideCompleted, setGuideCompleted] = useState(
+    () => window.localStorage.getItem(GUIDE_STORAGE_KEY) === 'true',
+  );
+  const [guideStage, setGuideStage] = useState('idle');
+  const [guidePieceIds, setGuidePieceIds] = useState([]);
   const [guideCycle, setGuideCycle] = useState(0);
   const [guidePosition, setGuidePosition] = useState(null);
-  const [displayedGuideStep, setDisplayedGuideStep] = useState('select');
-  const [guideCopyVisible, setGuideCopyVisible] = useState(true);
+  const [displayedGuideStep, setDisplayedGuideStep] = useState(null);
+  const [guideCopyVisible, setGuideCopyVisible] = useState(false);
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -115,6 +120,7 @@ function BatchPlaceDemo() {
       window.clearTimeout(holdTimerRef.current);
       window.clearTimeout(pickerCloseAnimationTimerRef.current);
       window.clearTimeout(guideCopyTimerRef.current);
+      window.clearTimeout(guideHoldDelayTimerRef.current);
       window.clearInterval(guideCycleTimerRef.current);
     };
   }, []);
@@ -136,6 +142,10 @@ function BatchPlaceDemo() {
     return () => window.clearInterval(timer);
   }, [undoInfo]);
 
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds;
+  }, [selectedIds]);
+
   const placedIdSet = useMemo(
     () => new Set(placedBatches.flatMap((batch) => batch.ids)),
     [placedBatches],
@@ -149,26 +159,33 @@ function BatchPlaceDemo() {
   );
 
   const selectedPieces = useMemo(
-    () => pieceOrder
-      .filter((id) => selectedIds.includes(id) && !placedIdSet.has(id))
+    () => selectedIds
+      .filter((id) => !placedIdSet.has(id))
       .map((id) => PIECES.find((piece) => piece.id === id)),
-    [pieceOrder, placedIdSet, selectedIds],
+    [placedIdSet, selectedIds],
   );
 
-  const guidePieces = useMemo(
-    () => availablePieces.filter((piece) => !selectedIds.includes(piece.id)).slice(0, 1),
-    [availablePieces, selectedIds],
-  );
+  const remainingGuideIds = guidePieceIds.filter((id) => !selectedIds.includes(id));
+  const guideSelectableIds = guideStage === 'selectFirst'
+    ? guidePieceIds.slice(0, 1)
+    : guidePieceIds;
+  const highlightedGuideIds = remainingGuideIds.filter((id) => guideSelectableIds.includes(id));
   const selectedKey = selectedIds.join(',');
-  const guideTargetId = guideStage === 'click'
-    ? guidePieces[guideIndex]?.id
-    : guideStage === 'hold' || guideStage === 'drag'
-      ? holdPieceIdRef.current ?? selectedIds.at(-1)
+  const guideTargetId = guideStage === 'selectFirst' || guideStage === 'selectMore'
+    ? highlightedGuideIds[0]
+    : guideStage === 'hold'
+      ? selectedIds.at(-1)
+      : guideStage === 'drag'
+        ? holdPieceIdRef.current ?? selectedIds.at(-1)
       : null;
   const nextGuideStep = view !== 'select'
     ? null
-    : guideStage === 'click'
-      ? 'select'
+    : guideStage === 'selectFirst'
+      ? 'selectFirst'
+      : guideStage === 'selectMore'
+        ? 'selectMore'
+      : guideStage === 'settling'
+        ? 'selectMore'
       : guideStage === 'hold'
         ? 'hold'
         : guideStage === 'drag'
@@ -191,36 +208,43 @@ function BatchPlaceDemo() {
     return () => window.clearTimeout(guideCopyTimerRef.current);
   }, [displayedGuideStep, nextGuideStep]);
 
+  const scheduleHoldGuide = () => {
+    window.clearTimeout(guideHoldDelayTimerRef.current);
+    setGuideStage('settling');
+    guideHoldDelayTimerRef.current = window.setTimeout(() => {
+      setGuideStage(selectedIdsRef.current.length >= 2 ? 'hold' : 'selectMore');
+    }, 1000);
+  };
+
   useEffect(() => {
     window.clearInterval(guideCycleTimerRef.current);
 
-    if (dragging && guideStage === 'drag') return undefined;
+    if (guideCompleted || (dragging && guideStage === 'drag')) return undefined;
 
     if (view !== 'select' || dragging || !availablePieces.length) {
       setGuideStage('idle');
       return undefined;
     }
 
-    if (selectedIds.length >= 2 && guideStage === 'hold') {
+    if (!guidePieceIds.length) {
+      setGuidePieceIds(availablePieces.slice(0, 4).map((piece) => piece.id));
       return undefined;
     }
 
-    if (selectedIds.length >= 2) {
-      setGuideCycle((cycle) => cycle + 1);
-      setGuideStage('hold');
+    if (guidePieceIds.every((id) => selectedIds.includes(id))) {
+      if (guideStage !== 'settling' && guideStage !== 'hold') scheduleHoldGuide();
       return undefined;
     }
 
-    setGuideIndex(0);
+    const nextStage = selectedIds.includes(guidePieceIds[0]) ? 'selectMore' : 'selectFirst';
+    setGuideStage(nextStage);
     setGuideCycle((cycle) => cycle + 1);
-    setGuideStage('click');
     guideCycleTimerRef.current = window.setInterval(() => {
-      setGuideIndex((index) => (index + 1) % Math.max(guidePieces.length, 1));
       setGuideCycle((cycle) => cycle + 1);
-    }, 1100);
+    }, nextStage === 'selectMore' && highlightedGuideIds.length > 1 ? 3200 : 1100);
 
     return undefined;
-  }, [availablePieces.length, dragging, guidePieces.length, guideStage, selectedKey, view]);
+  }, [availablePieces.length, dragging, guideCompleted, guidePieceIds, guideStage, highlightedGuideIds.length, selectedKey, view]);
 
   useEffect(() => {
     if (guideStage !== 'hold' && guideStage !== 'drag') return undefined;
@@ -244,25 +268,34 @@ function BatchPlaceDemo() {
       const targetRect = target.getBoundingClientRect();
       const phoneRect = phone.getBoundingClientRect();
       const targetCenterY = targetRect.top + targetRect.height / 2;
-      const boardTop = board?.getBoundingClientRect().top ?? targetCenterY - 132;
+      const boardRect = board?.getBoundingClientRect();
+      const boardTop = boardRect?.top ?? targetCenterY - 132;
+      const sweepTargets = highlightedGuideIds
+        .map((id) => pickerRef.current?.querySelector(`[data-piece-id="${id}"]`))
+        .filter(Boolean)
+        .map((element) => element.getBoundingClientRect());
+      const sweepCenters = sweepTargets.map((rect) => rect.left + rect.width / 2);
+      const sweepX = sweepCenters.length > 1
+        ? sweepCenters.at(-1) - sweepCenters[0]
+        : 0;
+      const sweepMidX = sweepCenters.length > 2
+        ? sweepCenters[1] - sweepCenters[0]
+        : sweepX / 2;
       setGuidePosition({
         x: targetRect.left - phoneRect.left + targetRect.width / 2,
         y: targetCenterY - phoneRect.top,
         dragY: boardTop - targetCenterY,
+        sweepX,
+        sweepMidX,
       });
     };
 
     const frame = window.requestAnimationFrame(measureTarget);
     return () => window.cancelAnimationFrame(frame);
-  }, [guideTargetId, guideStage, pickerClosing, view, availablePieces.length, selectedKey]);
+  }, [guideTargetId, guideStage, pickerClosing, view, availablePieces.length, selectedKey, highlightedGuideIds.join(',')]);
 
   const layout = useMemo(() => {
-    const columns = selectedPieces.length <= 4 ? 2 : 3;
-    return selectedPieces.map((piece, index) => ({
-      piece,
-      x: (index % columns) * 52,
-      y: Math.floor(index / columns) * 52,
-    }));
+    return buildBatchLayout(selectedPieces);
   }, [selectedPieces]);
 
   const layoutBounds = useMemo(() => {
@@ -280,19 +313,22 @@ function BatchPlaceDemo() {
     }
 
     const wasSelected = selectedIds.includes(id);
+    const guideSelectionLocked = !guideCompleted
+      && (guideStage === 'selectFirst' || guideStage === 'selectMore')
+      && !guideSelectableIds.includes(id);
+    if (guideSelectionLocked) return;
+
     const nextSelection = wasSelected
       ? selectedIds.filter((pieceId) => pieceId !== id)
-      : selectedIds.length >= MAX_SELECTION
-        ? selectedIds
-        : [...selectedIds, id];
-
-    if (wasSelected) {
-      delete selectedFlashDelaysRef.current[id];
-    } else if (nextSelection !== selectedIds) {
-      selectedFlashDelaysRef.current[id] = -(performance.now() % SELECTED_FLASH_DURATION);
-    }
+      : [...selectedIds, id];
 
     setSelectedIds(nextSelection);
+    selectedIdsRef.current = nextSelection;
+    if (!guideCompleted
+      && !wasSelected
+      && (guideStage === 'settling' || guideStage === 'hold')) {
+      scheduleHoldGuide();
+    }
   };
 
   const pointInPlaySpace = ({ clientX, clientY }) => {
@@ -301,11 +337,14 @@ function BatchPlaceDemo() {
       x: clientX - rect.left,
       y: clientY - rect.top,
     };
+    const x = cursorPosition.x - layoutBounds.width / 2;
+    const y = cursorPosition.y - layoutBounds.height - 34;
     return {
-      x: cursorPosition.x - layoutBounds.width / 2,
-      y: cursorPosition.y - layoutBounds.height - 34,
+      x,
+      y,
       cursor: cursorPosition,
-      inside: pointInsideRect({ clientX, clientY }, rect),
+      inside: pointInsideRect({ clientX, clientY }, rect)
+        && batchFullyInsideRect({ x, y }, layoutBounds, rect),
     };
   };
 
@@ -369,11 +408,11 @@ function BatchPlaceDemo() {
     setHint(source === 'picker'
       ? '向上拖出展开区域，查看最终排布预览'
       : '预览就是最终排布，松手后原样落下');
-    navigator.vibrate?.(35);
+    navigator.vibrate?.(50);
   };
 
   const startHold = (event, source = 'tray', pieceId = null) => {
-    if (!selectedIds.length || (source === 'picker' && !selectedIds.includes(pieceId))) return;
+    if (selectedIds.length < 2 || (source === 'picker' && !selectedIds.includes(pieceId))) return;
     window.clearTimeout(holdTimerRef.current);
     pointerIdRef.current = event.pointerId;
     holdPieceIdRef.current = pieceId;
@@ -428,7 +467,10 @@ function BatchPlaceDemo() {
 
     const source = gestureSourceRef.current;
     const point = updateOrigin({ clientX: event.clientX, clientY: event.clientY });
-    const canPlace = point.inside && !(source === 'picker' && !leftPickerRef.current);
+    const touchInterrupted = event.type === 'pointercancel';
+    const canPlace = !touchInterrupted
+      && point.inside
+      && !(source === 'picker' && !leftPickerRef.current);
     if (canPlace) {
       window.clearTimeout(pickerCloseAnimationTimerRef.current);
       pickerClosingRef.current = false;
@@ -445,12 +487,22 @@ function BatchPlaceDemo() {
       setSelectedIds([]);
       setView('board');
       setHint('已放置，可继续展开选择其他拼图块');
+      if (!guideCompleted) {
+        window.localStorage.setItem(GUIDE_STORAGE_KEY, 'true');
+        setGuideCompleted(true);
+        setGuideStage('complete');
+      }
     } else {
-      const keepPickerOpen = source === 'picker' && !leftPickerRef.current;
-      setView(keepPickerOpen ? 'select' : 'board');
-      setHint(keepPickerOpen
-        ? '已保留选择，请拖入灰色拼图区域'
-        : '请拖到灰色拼图区域内松手');
+      const failedIds = [...selectedIds];
+      setPieceOrder((current) => [
+        ...failedIds,
+        ...current.filter((id) => !failedIds.includes(id)),
+      ]);
+      setView('board');
+      setHint(touchInterrupted
+        ? '操作已中断，选择已保留'
+        : '未放置：请确保所有碎片都在操作台内');
+      if (!guideCompleted) setGuideStage('hold');
     }
 
     draggingRef.current = false;
@@ -485,9 +537,10 @@ function BatchPlaceDemo() {
 
   const reset = () => {
     window.clearTimeout(pickerCloseAnimationTimerRef.current);
+    window.clearTimeout(guideHoldDelayTimerRef.current);
     pickerClosingRef.current = false;
     setPickerClosing(false);
-    setView('select');
+    setView('board');
     setPieceOrder(PIECES.map((piece) => piece.id));
     setSelectedIds(INITIAL_SELECTION);
     setPlacedBatches([]);
@@ -536,6 +589,25 @@ function BatchPlaceDemo() {
     setUndoInfo(null);
     setHint('已撤销，本组拼图块已恢复选择');
     setView('board');
+  };
+
+  const resetGuide = () => {
+    window.localStorage.removeItem(GUIDE_STORAGE_KEY);
+    window.clearTimeout(holdTimerRef.current);
+    window.clearTimeout(pickerCloseAnimationTimerRef.current);
+    window.clearTimeout(guideHoldDelayTimerRef.current);
+    setGuideCompleted(false);
+    setGuideStage('idle');
+    setGuidePieceIds([]);
+    setSelectedIds([]);
+    selectedIdsRef.current = [];
+    setDragging(false);
+    draggingRef.current = false;
+    setGatherVectors({});
+    setPickerClosing(false);
+    pickerClosingRef.current = false;
+    setView('board');
+    setHint('引导已重置，点击展开重新体验');
   };
 
   const renderCarryStack = () => {
@@ -609,8 +681,8 @@ function BatchPlaceDemo() {
           })}
 
           {placedBatches.map((batch) => renderPlacedBatch(batch))}
-          {dragging && view === 'board' && insideBoard && renderGroup(origin, 'preview')}
-          {dragging && (view === 'select' || !insideBoard) && renderCarryStack()}
+          {dragging && view === 'board' && renderGroup(origin, insideBoard ? 'preview valid' : 'preview invalid')}
+          {dragging && view === 'select' && renderCarryStack()}
 
           {view === 'select' && (
             <section className={`expanded-picker ${pickerClosing ? 'picker-closing' : ''}`} ref={pickerRef}>
@@ -619,9 +691,12 @@ function BatchPlaceDemo() {
                 className="collapse-picker"
                 onClick={() => {
                   window.clearTimeout(pickerCloseAnimationTimerRef.current);
+                  window.clearTimeout(guideHoldDelayTimerRef.current);
                   pickerClosingRef.current = false;
                   setPickerClosing(false);
+                  setSelectedIds([]);
                   setView('board');
+                  setHint('已收起，当前选择已清空');
                 }}
                 aria-label="收起拼图列表"
               >
@@ -630,18 +705,19 @@ function BatchPlaceDemo() {
               <div className="expanded-grid">
                 {availablePieces.map((piece) => {
                   const selected = selectedIds.includes(piece.id);
-                  const selectionCount = selectedIds.length;
-                  const selectionLocked = selectionCount >= MAX_SELECTION && !selected;
+                  const selectionLocked = !guideCompleted
+                    && (guideStage === 'selectFirst' || guideStage === 'selectMore')
+                    && !guideSelectableIds.includes(piece.id);
+                  const guideTarget = !guideCompleted
+                    && (guideStage === 'selectFirst' || guideStage === 'selectMore')
+                    && highlightedGuideIds.includes(piece.id);
                   return (
                     <PuzzlePiece
                       key={piece.id}
                       piece={piece}
-                      className={dragging && selected ? 'source-piece-hidden' : ''}
+                      className={`${dragging && selected ? 'source-piece-hidden' : ''} ${guideTarget ? 'guide-target-piece' : ''}`}
                       selected={selected}
                       disabled={selectionLocked}
-                      style={selected ? {
-                        '--selected-flash-delay': `${selectedFlashDelaysRef.current[piece.id] ?? 0}ms`,
-                      } : undefined}
                       onClick={() => togglePiece(piece.id)}
                       onPointerDown={(event) => startHold(event, 'picker', piece.id)}
                       label={`${selected ? '取消选择' : '选择'}碎片 ${piece.id}`}
@@ -653,16 +729,18 @@ function BatchPlaceDemo() {
           )}
         </div>
 
-        {guidePosition
-          && (((guideStage === 'click' || guideStage === 'hold') && !dragging)
+          {guidePosition
+          && ((((guideStage === 'selectFirst' || guideStage === 'selectMore') || guideStage === 'hold') && !dragging)
             || (guideStage === 'drag' && dragging && view === 'select'))
           && (
           <div
-            className={`gesture-guide gesture-guide-${guideStage}`}
+            className={`gesture-guide gesture-guide-${guideStage === 'selectFirst' || (guideStage === 'selectMore' && highlightedGuideIds.length === 1) ? 'click' : guideStage === 'selectMore' ? 'sweep' : guideStage} ${guideStage === 'selectMore' ? `sweep-${highlightedGuideIds.length}` : ''}`}
             style={{
               left: guidePosition.x,
               top: guidePosition.y,
               '--guide-drag-y': `${guidePosition.dragY}px`,
+              '--guide-sweep-x': `${guidePosition.sweepX}px`,
+              '--guide-sweep-mid-x': `${guidePosition.sweepMidX}px`,
             }}
             aria-hidden="true"
           >
@@ -693,7 +771,14 @@ function BatchPlaceDemo() {
 
         {view === 'board' && (
           <section className="piece-tray">
-            <button type="button" className="expand-picker" onClick={() => setView('select')}>展开</button>
+            <button
+              type="button"
+              className="expand-picker"
+              onClick={() => {
+                setView('select');
+                if (!guideCompleted) setGuideStage(selectedIds.length >= 2 ? 'hold' : 'selectFirst');
+              }}
+            >展开</button>
             <div className="collapsed-piece-strip" aria-label="未放置拼图块">
               {availablePieces.slice(0, 5).map((piece, index) => (
                 <PuzzlePiece
@@ -710,7 +795,10 @@ function BatchPlaceDemo() {
           </section>
         )}
 
-        <footer className="game-brand">Jigsaw Puzzles</footer>
+        <footer className="game-brand">
+          <span>Jigsaw Puzzles</span>
+          <button type="button" className="reset-guide" onClick={resetGuide}>重置引导</button>
+        </footer>
       </section>
     </main>
   );
